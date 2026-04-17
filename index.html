@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metadata Scraper</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3345;
+  --text: #e4e6f0;
+  --text2: #8b8fa8;
+  --accent: #6c7eff;
+  --accent2: #4e5bff;
+  --danger: #ff4d6a;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --radius: 12px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+header .badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+/* Drop Zone */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+  position: relative;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(108, 126, 255, 0.05);
+}
+
+.dropzone.dragover {
+  transform: scale(1.01);
+}
+
+.dropzone-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.dropzone p {
+  color: var(--text2);
+  font-size: 0.9rem;
+}
+
+.dropzone p strong {
+  color: var(--accent);
+}
+
+.dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover { background: var(--surface2); border-color: var(--accent); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent2); color: #fff; }
+.btn.primary:hover { background: var(--accent2); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: rgba(255, 77, 106, 0.1); }
+
+/* Stats bar */
+.stats {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+.stats span strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Results */
+.results { display: flex; flex-direction: column; gap: 12px; }
+
+.file-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.file-card:hover { border-color: var(--accent); }
+
+.file-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-header:hover { background: var(--surface2); }
+
+.file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.file-icon.image { background: rgba(59, 130, 246, 0.15); }
+.file-icon.pdf { background: rgba(239, 68, 68, 0.15); }
+.file-icon.audio { background: rgba(168, 85, 247, 0.15); }
+.file-icon.video { background: rgba(236, 72, 153, 0.15); }
+.file-icon.document { background: rgba(34, 197, 94, 0.15); }
+.file-icon.unknown { background: rgba(107, 114, 128, 0.15); }
+
+.file-info { flex: 1; min-width: 0; }
+
+.file-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  font-size: 0.75rem;
+  color: var(--text2);
+  display: flex;
+  gap: 8px;
+}
+
+.file-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.file-actions .btn { padding: 5px 10px; font-size: 0.75rem; }
+
+.chevron {
+  color: var(--text2);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.file-card.open .chevron { transform: rotate(90deg); }
+
+.file-body {
+  display: none;
+  padding: 0 16px 16px;
+}
+
+.file-card.open .file-body { display: block; }
+
+/* Thumbnail */
+.thumb-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.thumbnail {
+  width: 120px;
+  height: 90px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+/* Metadata Table */
+.meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.meta-table tr { border-bottom: 1px solid var(--border); }
+.meta-table tr:last-child { border-bottom: none; }
+
+.meta-table td {
+  padding: 6px 0;
+  vertical-align: top;
+}
+
+.meta-table td:first-child {
+  color: var(--text2);
+  white-space: nowrap;
+  padding-right: 16px;
+  width: 140px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.meta-table td:last-child {
+  word-break: break-all;
+}
+
+.gps-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.gps-link:hover { color: var(--accent2); }
+
+.meta-section {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 0 4px;
+}
+
+/* Map */
+.map-section {
+  margin-top: 20px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  display: none;
+}
+
+.map-section.visible { display: block; }
+
+.map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.map-header h3 { font-size: 0.9rem; }
+
+#map {
+  height: 350px;
+  background: var(--bg);
+}
+
+/* Progress */
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 12px 0;
+  display: none;
+}
+
+.progress-bar.active { display: block; }
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+  width: 0%;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s;
+  z-index: 1000;
+}
+
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { border-color: var(--danger); }
+
+/* Device tier badges */
+.badge.tier-low { background: rgba(255, 77, 106, 0.15); color: var(--danger); border-color: var(--danger); }
+.badge.tier-mid { background: rgba(251, 191, 36, 0.15); color: var(--warning); border-color: var(--warning); }
+.badge.tier-high { background: rgba(52, 211, 153, 0.15); color: var(--success); border-color: var(--success); }
+
+/* Memory bar (inline in header) */
+.memory-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.7rem;
+  color: var(--text2);
+  margin-left: auto;
+  min-width: 160px;
+}
+
+.memory-bar .mem-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.memory-bar .mem-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.5s, background 0.3s;
+}
+
+.memory-bar .mem-fill.warn { background: var(--warning); }
+.memory-bar .mem-fill.danger { background: var(--danger); }
+
+.file-skipped {
+  font-size: 0.75rem;
+  color: var(--warning);
+  padding: 6px 12px;
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: var(--text2);
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .app { padding: 16px 12px; }
+  .dropzone { padding: 32px 16px; }
+  .file-header { padding: 10px 12px; }
+  .stats { flex-wrap: wrap; gap: 8px; }
+  .toolbar { gap: 6px; }
+  .btn { padding: 6px 12px; font-size: 0.75rem; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Metadata Scraper</h1>
+    <span class="badge">Offline &bull; In-Browser</span>
+    <span class="badge" id="deviceBadge" title="Detected device tier">--</span>
+    <div class="memory-bar" id="memoryBar">
+      <span>Memory</span>
+      <div class="mem-track"><div class="mem-fill" id="memFill" style="width:0%"></div></div>
+      <span id="memLabel">--</span>
+    </div>
+  </header>
+
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">&#128269;</div>
+    <p>Drop files here or <strong>click to browse</strong></p>
+    <p style="margin-top:6px;font-size:0.75rem">Images, PDFs, Audio, Video, DOCX, XLSX</p>
+    <input type="file" id="fileInput" multiple>
+  </div>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div class="toolbar" id="toolbar" style="display:none">
+    <button class="btn primary" onclick="exportJSON()">Export JSON</button>
+    <button class="btn" onclick="exportCSV()">Export CSV</button>
+    <button class="btn" onclick="stripAll()">Strip All Metadata</button>
+    <button class="btn danger" onclick="clearAll()">Clear All</button>
+  </div>
+
+  <div class="stats" id="stats" style="display:none">
+    <span>Files: <strong id="statFiles">0</strong></span>
+    <span>With GPS: <strong id="statGps">0</strong></span>
+    <span>Types: <strong id="statTypes">-</strong></span>
+    <span>Limit: <strong id="statLimit">-</strong></span>
+  </div>
+
+  <div class="results" id="results">
+    <div class="empty-state" id="emptyState">No files processed yet</div>
+  </div>
+
+  <div class="map-section" id="mapSection">
+    <div class="map-header">
+      <h3>GPS Locations</h3>
+      <button class="btn" onclick="fitMapBounds()" style="font-size:0.75rem">Fit All</button>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+// ── Hardware Detection & Adaptive Limits ──────────
+const hw = detectHardware();
+const limits = computeLimits(hw);
+initDeviceBadge(hw);
+
+function detectHardware() {
+  const cores = navigator.hardwareConcurrency || 2;
+  // navigator.deviceMemory: Chrome/Edge only, returns GB (0.25, 0.5, 1, 2, 4, 8+)
+  // Falls back to estimation from core count
+  const ramGB = navigator.deviceMemory || estimateRAM(cores);
+  const tier = (ramGB <= 4 || cores <= 2) ? 'low' : (ramGB <= 8 || cores <= 4) ? 'mid' : 'high';
+  return { cores, ramGB, tier };
+}
+
+function estimateRAM(cores) {
+  // Conservative guess when deviceMemory API unavailable
+  if (cores <= 2) return 4;
+  if (cores <= 4) return 8;
+  return 16;
+}
+
+function computeLimits(hw) {
+  const L = {
+    // Max file size in bytes per type
+    maxFileSize: {},
+    // Max batch size (files processed at once)
+    maxBatch: 10,
+    // Max total loaded in memory (bytes)
+    maxMemLoad: 100 * 1024 * 1024,
+    // Max result cards in DOM before virtualizing
+    maxCards: 200,
+    // Skip thumbnails for images above this size
+    thumbMaxSize: 20 * 1024 * 1024,
+    // Yield to UI every N files
+    yieldEvery: 3,
+  };
+
+  if (hw.tier === 'low') {
+    L.maxFileSize = { image: 30*1024*1024, pdf: 50*1024*1024, audio: 80*1024*1024, video: 200*1024*1024, document: 30*1024*1024 };
+    L.maxBatch = 10;
+    L.maxMemLoad = 80 * 1024 * 1024;
+    L.maxCards = 100;
+    L.thumbMaxSize = 8 * 1024 * 1024;
+    L.yieldEvery = 1;
+  } else if (hw.tier === 'mid') {
+    L.maxFileSize = { image: 100*1024*1024, pdf: 150*1024*1024, audio: 300*1024*1024, video: 500*1024*1024, document: 80*1024*1024 };
+    L.maxBatch = 50;
+    L.maxMemLoad = 200 * 1024 * 1024;
+    L.maxCards = 300;
+    L.thumbMaxSize = 20 * 1024 * 1024;
+    L.yieldEvery = 3;
+  } else {
+    L.maxFileSize = { image: 300*1024*1024, pdf: 500*1024*1024, audio: 1024*1024*1024, video: 2048*1024*1024, document: 200*1024*1024 };
+    L.maxBatch = 200;
+    L.maxMemLoad = 500 * 1024 * 1024;
+    L.maxCards = 1000;
+    L.thumbMaxSize = 50 * 1024 * 1024;
+    L.yieldEvery = 5;
+  }
+
+  return L;
+}
+
+function initDeviceBadge(hw) {
+  const badge = document.getElementById('deviceBadge');
+  const labels = { low: 'Low-End', mid: 'Mid-Tier', high: 'High-End' };
+  badge.textContent = `${labels[hw.tier]} (${hw.ramGB}GB / ${hw.cores}c)`;
+  badge.classList.add('tier-' + hw.tier);
+  badge.title = `RAM: ${hw.ramGB}GB | Cores: ${hw.cores} | Tier: ${hw.tier}\nMax batch: ${limits.maxBatch} | Max file: ${formatSize(Math.max(...Object.values(limits.maxFileSize)))}`;
+}
+
+function getMemoryUsage() {
+  // Self-tracked: sum of file sizes we're holding references to
+  const held = state.results.reduce((sum, r) => {
+    // Count file ref (~file.size in memory) + metadata object estimate
+    if (r.file) sum += r.file.size;
+    if (r._fileForStrip && r._fileForStrip !== r.file) sum += r._fileForStrip.size;
+    sum += 2048; // estimate for metadata object, DOM card, etc.
+    return sum;
+  }, 0);
+  const cap = limits.maxMemLoad;
+  return { used: held, total: cap, pct: Math.min(100, Math.round((held / cap) * 100)) };
+}
+
+function updateMemoryBar() {
+  const mem = getMemoryUsage();
+  const fill = document.getElementById('memFill');
+  const label = document.getElementById('memLabel');
+
+  fill.style.width = mem.pct + '%';
+  label.textContent = `${formatSize(mem.used)} / ${formatSize(mem.total)}`;
+  fill.className = 'mem-fill' + (mem.pct > 80 ? ' danger' : mem.pct > 60 ? ' warn' : '');
+  return mem;
+}
+
+function yieldToUI() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// ── State ──────────────────────────────────────────
+const state = { results: [], gpsPoints: [], skipped: [] };
+let map = null;
+let markers = [];
+
+// ── DOM refs ───────────────────────────────────────
+const $dropzone = document.getElementById('dropzone');
+const $fileInput = document.getElementById('fileInput');
+const $results = document.getElementById('results');
+const $toolbar = document.getElementById('toolbar');
+const $stats = document.getElementById('stats');
+const $emptyState = document.getElementById('emptyState');
+const $progressBar = document.getElementById('progressBar');
+const $progressFill = document.getElementById('progressFill');
+const $mapSection = document.getElementById('mapSection');
+
+// ── File Type Detection ────────────────────────────
+const FILE_TYPES = {
+  image: { ext: ['jpg','jpeg','png','tiff','tif','webp','heic','heif','bmp','gif','avif'], icon: '&#128247;' },
+  pdf:   { ext: ['pdf'], icon: '&#128196;' },
+  audio: { ext: ['mp3','flac','ogg','wav','aac','m4a','wma','aiff'], icon: '&#127925;' },
+  video: { ext: ['mp4','mkv','avi','mov','wmv','webm','flv','m4v'], icon: '&#127909;' },
+  document: { ext: ['docx','xlsx','pptx','odt','ods'], icon: '&#128209;' }
+};
+
+function detectType(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  for (const [type, cfg] of Object.entries(FILE_TYPES)) {
+    if (cfg.ext.includes(ext)) return type;
+  }
+  // Fallback to MIME
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type === 'application/pdf') return 'pdf';
+  if (file.type.startsWith('audio/')) return 'audio';
+  if (file.type.startsWith('video/')) return 'video';
+  return 'unknown';
+}
+
+function getIcon(type) {
+  return FILE_TYPES[type]?.icon || '&#128196;';
+}
+
+// ── Utilities ──────────────────────────────────────
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0) + ' ' + sizes[i];
+}
+
+function formatDate(d) {
+  if (!d) return null;
+  if (typeof d === 'string') d = new Date(d);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString();
+}
+
+function readAsArrayBuffer(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsArrayBuffer(file);
+  });
+}
+
+function readAsDataURL(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = 'toast', 3000);
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Extractors ─────────────────────────────────────
+
+async function extractImage(file) {
+  const meta = {};
+  try {
+    const data = await exifr.parse(file, {
+      tiff: true, exif: true, gps: true, icc: false,
+      iptc: true, xmp: true, jfif: true,
+      translateKeys: true, translateValues: true, reviveValues: true
+    });
+    if (data) {
+      // Camera
+      if (data.Make) meta['Make'] = data.Make;
+      if (data.Model) meta['Model'] = data.Model;
+      if (data.LensModel) meta['Lens'] = data.LensModel;
+
+      // Settings
+      if (data.ExposureTime) meta['Exposure'] = data.ExposureTime < 1 ? `1/${Math.round(1/data.ExposureTime)}s` : `${data.ExposureTime}s`;
+      if (data.FNumber) meta['Aperture'] = `f/${data.FNumber}`;
+      if (data.ISO) meta['ISO'] = data.ISO;
+      if (data.FocalLength) meta['Focal Length'] = `${data.FocalLength}mm`;
+      if (data.Flash) meta['Flash'] = data.Flash;
+
+      // Image
+      if (data.ImageWidth || data.ExifImageWidth) meta['Dimensions'] = `${data.ImageWidth || data.ExifImageWidth} x ${data.ImageHeight || data.ExifImageHeight}`;
+      if (data.ColorSpace) meta['Color Space'] = data.ColorSpace;
+      if (data.BitsPerSample) meta['Bit Depth'] = data.BitsPerSample;
+      if (data.Orientation) meta['Orientation'] = data.Orientation;
+
+      // Dates
+      if (data.DateTimeOriginal) meta['Date Taken'] = formatDate(data.DateTimeOriginal);
+      if (data.ModifyDate) meta['Modified'] = formatDate(data.ModifyDate);
+
+      // Software
+      if (data.Software) meta['Software'] = data.Software;
+      if (data.Artist) meta['Artist'] = data.Artist;
+      if (data.Copyright) meta['Copyright'] = data.Copyright;
+
+      // GPS
+      if (data.latitude != null && data.longitude != null) {
+        meta['GPS Latitude'] = data.latitude.toFixed(6);
+        meta['GPS Longitude'] = data.longitude.toFixed(6);
+        if (data.GPSAltitude) meta['GPS Altitude'] = `${data.GPSAltitude.toFixed(1)}m`;
+        meta._gps = { lat: data.latitude, lng: data.longitude };
+      }
+
+      // IPTC
+      if (data.Headline) meta['Headline'] = data.Headline;
+      if (data.Caption) meta['Caption'] = data.Caption;
+      if (data.Keywords) meta['Keywords'] = Array.isArray(data.Keywords) ? data.Keywords.join(', ') : data.Keywords;
+    }
+  } catch (e) {
+    meta._error = 'EXIF parse failed: ' + e.message;
+  }
+
+  // Get dimensions from image element if not in EXIF
+  if (!meta['Dimensions']) {
+    try {
+      const url = await readAsDataURL(file);
+      const dims = await new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => res(null);
+        img.src = url;
+      });
+      if (dims) meta['Dimensions'] = `${dims.w} x ${dims.h}`;
+    } catch {}
+  }
+
+  return meta;
+}
+
+async function extractPdf(file) {
+  const meta = {};
+  try {
+    const buf = await readAsArrayBuffer(file);
+    const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+    const title = pdf.getTitle();
+    const author = pdf.getAuthor();
+    const subject = pdf.getSubject();
+    const creator = pdf.getCreator();
+    const producer = pdf.getProducer();
+    const created = pdf.getCreationDate();
+    const modified = pdf.getModificationDate();
+    const pages = pdf.getPageCount();
+    const keywords = pdf.getKeywords();
+
+    if (title) meta['Title'] = title;
+    if (author) meta['Author'] = author;
+    if (subject) meta['Subject'] = subject;
+    if (keywords) meta['Keywords'] = keywords;
+    if (creator) meta['Creator'] = creator;
+    if (producer) meta['Producer'] = producer;
+    if (created) meta['Created'] = formatDate(created);
+    if (modified) meta['Modified'] = formatDate(modified);
+    meta['Pages'] = pages;
+
+    // Page dimensions
+    const firstPage = pdf.getPage(0);
+    const { width, height } = firstPage.getSize();
+    meta['Page Size'] = `${Math.round(width)} x ${Math.round(height)} pts`;
+
+    // PDF version
+    try {
+      const header = new Uint8Array(buf.slice(0, 20));
+      const headerStr = String.fromCharCode(...header);
+      const verMatch = headerStr.match(/%PDF-(\d+\.\d+)/);
+      if (verMatch) meta['PDF Version'] = verMatch[1];
+    } catch {}
+
+  } catch (e) {
+    meta._error = 'PDF parse failed: ' + e.message;
+  }
+  return meta;
+}
+
+async function extractAudio(file) {
+  const meta = {};
+  return new Promise((resolve) => {
+    try {
+      jsmediatags.read(file, {
+        onSuccess: (tag) => {
+          const t = tag.tags;
+          if (t.title) meta['Title'] = t.title;
+          if (t.artist) meta['Artist'] = t.artist;
+          if (t.album) meta['Album'] = t.album;
+          if (t.year) meta['Year'] = t.year;
+          if (t.genre) meta['Genre'] = t.genre;
+          if (t.track) meta['Track'] = t.track;
+          if (t.comment) {
+            const c = typeof t.comment === 'object' ? t.comment.text : t.comment;
+            if (c) meta['Comment'] = c;
+          }
+          if (t.TBPM?.data) meta['BPM'] = t.TBPM.data;
+          if (t.TCOM?.data) meta['Composer'] = t.TCOM.data;
+          if (t.TPUB?.data) meta['Publisher'] = t.TPUB.data;
+          if (t.TCOP?.data) meta['Copyright'] = t.TCOP.data;
+          if (t.TENC?.data) meta['Encoded By'] = t.TENC.data;
+
+          // Album art info
+          if (t.picture) {
+            meta['Album Art'] = `${t.picture.format}, ${formatSize(t.picture.data.length)}`;
+          }
+          resolve(meta);
+        },
+        onError: (e) => {
+          meta._error = 'Tag parse failed: ' + (e.type || e.message || e);
+          resolve(meta);
+        }
+      });
+    } catch (e) {
+      meta._error = 'Tag parse failed: ' + e.message;
+      resolve(meta);
+    }
+
+    // Get duration via Audio element
+    const url = URL.createObjectURL(file);
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => {
+      if (isFinite(audio.duration)) {
+        const mins = Math.floor(audio.duration / 60);
+        const secs = Math.floor(audio.duration % 60);
+        meta['Duration'] = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+      URL.revokeObjectURL(url);
+    };
+    audio.onerror = () => URL.revokeObjectURL(url);
+    audio.src = url;
+  });
+}
+
+async function extractVideo(file) {
+  const meta = {};
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      if (isFinite(video.duration)) {
+        const h = Math.floor(video.duration / 3600);
+        const m = Math.floor((video.duration % 3600) / 60);
+        const s = Math.floor(video.duration % 60);
+        meta['Duration'] = h > 0 ? `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}` : `${m}:${s.toString().padStart(2,'0')}`;
+      }
+      if (video.videoWidth) meta['Resolution'] = `${video.videoWidth} x ${video.videoHeight}`;
+      URL.revokeObjectURL(url);
+
+      // Also try jsmediatags for MP4 metadata
+      try {
+        jsmediatags.read(file, {
+          onSuccess: (tag) => {
+            const t = tag.tags;
+            if (t.title) meta['Title'] = t.title;
+            if (t.artist) meta['Artist'] = t.artist;
+            if (t.album) meta['Album'] = t.album;
+            if (t.year) meta['Year'] = t.year;
+            if (t.genre) meta['Genre'] = t.genre;
+            if (t.comment) {
+              const c = typeof t.comment === 'object' ? t.comment.text : t.comment;
+              if (c) meta['Comment'] = c;
+            }
+            resolve(meta);
+          },
+          onError: () => resolve(meta)
+        });
+      } catch {
+        resolve(meta);
+      }
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      meta._error = 'Could not load video metadata';
+      resolve(meta);
+    };
+    video.src = url;
+  });
+}
+
+async function extractDocument(file) {
+  const meta = {};
+  try {
+    const buf = await readAsArrayBuffer(file);
+    const zip = await JSZip.loadAsync(buf);
+
+    // Parse core.xml (Dublin Core metadata)
+    const coreXml = await zip.file('docProps/core.xml')?.async('text');
+    if (coreXml) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(coreXml, 'text/xml');
+
+      const getText = (tag) => {
+        // Try with namespace prefix variations
+        for (const prefix of ['dc:', 'cp:', 'dcterms:', '']) {
+          const el = doc.getElementsByTagName(prefix + tag)[0];
+          if (el?.textContent) return el.textContent;
+        }
+        return null;
+      };
+
+      const creator = getText('creator');
+      const title = getText('title');
+      const subject = getText('subject');
+      const description = getText('description');
+      const keywords = getText('keywords');
+      const lastModifiedBy = getText('lastModifiedBy');
+      const created = getText('created');
+      const modified = getText('modified');
+      const revision = getText('revision');
+      const category = getText('category');
+
+      if (title) meta['Title'] = title;
+      if (creator) meta['Creator'] = creator;
+      if (subject) meta['Subject'] = subject;
+      if (description) meta['Description'] = description;
+      if (keywords) meta['Keywords'] = keywords;
+      if (lastModifiedBy) meta['Last Modified By'] = lastModifiedBy;
+      if (created) meta['Created'] = formatDate(created);
+      if (modified) meta['Modified'] = formatDate(modified);
+      if (revision) meta['Revision'] = revision;
+      if (category) meta['Category'] = category;
+    }
+
+    // Parse app.xml (application metadata)
+    const appXml = await zip.file('docProps/app.xml')?.async('text');
+    if (appXml) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(appXml, 'text/xml');
+      const getText = (tag) => doc.getElementsByTagName(tag)[0]?.textContent;
+
+      const app = getText('Application');
+      const version = getText('AppVersion');
+      const company = getText('Company');
+      const pages = getText('Pages');
+      const words = getText('Words');
+      const chars = getText('Characters');
+      const lines = getText('Lines');
+      const paragraphs = getText('Paragraphs');
+      const slides = getText('Slides');
+      const template = getText('Template');
+
+      if (app) meta['Application'] = app + (version ? ` ${version}` : '');
+      if (company) meta['Company'] = company;
+      if (pages) meta['Pages'] = pages;
+      if (words) meta['Words'] = Number(words).toLocaleString();
+      if (chars) meta['Characters'] = Number(chars).toLocaleString();
+      if (lines) meta['Lines'] = lines;
+      if (paragraphs) meta['Paragraphs'] = paragraphs;
+      if (slides) meta['Slides'] = slides;
+      if (template) meta['Template'] = template;
+    }
+
+    // For XLSX: count sheets
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'xlsx' || ext === 'ods') {
+      const wbXml = await zip.file('xl/workbook.xml')?.async('text');
+      if (wbXml) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(wbXml, 'text/xml');
+        const sheets = doc.getElementsByTagName('sheet');
+        meta['Sheets'] = sheets.length;
+        const names = [];
+        for (let i = 0; i < sheets.length; i++) names.push(sheets[i].getAttribute('name'));
+        if (names.length) meta['Sheet Names'] = names.join(', ');
+      }
+    }
+
+  } catch (e) {
+    meta._error = 'Document parse failed: ' + e.message;
+  }
+  return meta;
+}
+
+// ── Metadata Strippers ─────────────────────────────
+
+async function stripImage(file) {
+  // Canvas re-encode: strips ALL embedded metadata (EXIF, IPTC, XMP, ICC, GPS, thumbnails)
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      const ext = file.name.split('.').pop().toLowerCase();
+      const mimeType = (ext === 'png') ? 'image/png' : 'image/jpeg';
+      const quality = (ext === 'png') ? undefined : 0.95;
+
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Canvas export failed'));
+      }, mimeType, quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Image load failed'));
+    };
+    img.src = url;
+  });
+}
+
+async function stripPdf(file) {
+  const buf = await readAsArrayBuffer(file);
+  const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+
+  // CRITICAL: Override updateInfoDict — pdf-lib force-injects its own
+  // Producer ("pdf-lib") and ModificationDate during save(). This no-op
+  // prevents that, so our cleanup below actually sticks.
+  pdf.updateInfoDict = () => {};
+
+  // Completely purge the info dictionary (all keys — Title, Author, Creator,
+  // Producer, CreationDate, ModDate, Subject, Keywords, and any custom ones)
+  try {
+    const infoRef = pdf.context.trailerInfo.Info;
+    if (infoRef) {
+      const infoDict = pdf.context.lookup(infoRef);
+      if (infoDict) {
+        const keys = [];
+        if (infoDict.dict) {
+          for (const [key] of infoDict.dict) keys.push(key);
+        } else if (infoDict.entries) {
+          for (const [key] of infoDict.entries()) keys.push(key);
+        }
+        for (const key of keys) {
+          infoDict.delete(key);
+        }
+      }
+      // Remove the Info reference from trailer entirely
+      delete pdf.context.trailerInfo.Info;
+    }
+  } catch {}
+
+  // Remove XMP metadata stream
+  try {
+    const catalog = pdf.context.lookup(pdf.context.trailerInfo.Root);
+    if (catalog) {
+      catalog.delete(PDFLib.PDFName.of('Metadata'));
+      // Remove tracking/plugin objects
+      for (const tag of ['PieceInfo', 'MarkInfo', 'AA']) {
+        try { catalog.delete(PDFLib.PDFName.of(tag)); } catch {}
+      }
+    }
+  } catch {}
+
+  // Remove document IDs (tracking fingerprints)
+  try { delete pdf.context.trailerInfo.ID; } catch {}
+
+  const stripped = await pdf.save();
+  return new Blob([stripped], { type: 'application/pdf' });
+}
+
+async function stripAudio(file) {
+  const buf = await readAsArrayBuffer(file);
+  const data = new Uint8Array(buf);
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'mp3') {
+    let start = 0;
+    let end = data.length;
+
+    // Strip ID3v2 tag at beginning (starts with "ID3")
+    if (data[0] === 0x49 && data[1] === 0x44 && data[2] === 0x33) {
+      // ID3v2 header: 10 bytes header, size in bytes 6-9 (syncsafe integer)
+      const size = ((data[6] & 0x7F) << 21) |
+                   ((data[7] & 0x7F) << 14) |
+                   ((data[8] & 0x7F) << 7) |
+                   (data[9] & 0x7F);
+      start = 10 + size;
+      // Skip footer if present (ID3v2.4 flag)
+      if (data[5] & 0x10) start += 10;
+    }
+
+    // Strip ID3v1 tag at end (last 128 bytes starting with "TAG")
+    if (end >= 128 &&
+        data[end - 128] === 0x54 && data[end - 127] === 0x41 && data[end - 126] === 0x47) {
+      end -= 128;
+      // Also check for ID3v1.1 extended tag (additional 227 bytes before ID3v1)
+      if (end >= 227 &&
+          data[end - 227] === 0x54 && data[end - 226] === 0x41 && data[end - 225] === 0x47 && data[end - 224] === 0x2B) {
+        end -= 227;
+      }
+    }
+
+    // Strip APEv2 tag at end (if present, before or instead of ID3v1)
+    // APE tags end with "APETAGEX" preamble
+    const apeCheck = end >= 32 ? String.fromCharCode(...data.slice(end - 32, end - 24)) : '';
+    if (apeCheck === 'APETAGEX') {
+      // APE footer: last 32 bytes contain size at offset -20 (little-endian uint32)
+      const apeSize = data[end - 20] | (data[end - 19] << 8) | (data[end - 18] << 16) | (data[end - 17] << 24);
+      end -= (apeSize + 32);
+    }
+
+    if (start > 0 || end < data.length) {
+      const stripped = data.slice(start, end);
+      return new Blob([stripped], { type: 'audio/mpeg' });
+    }
+    return new Blob([data], { type: 'audio/mpeg' });
+  }
+
+  if (ext === 'flac') {
+    // FLAC: strip VORBIS_COMMENT and PICTURE metadata blocks
+    // Keep STREAMINFO (type 0) which is required
+    if (data[0] !== 0x66 || data[1] !== 0x4C || data[2] !== 0x61 || data[3] !== 0x43) {
+      throw new Error('Not a valid FLAC file');
+    }
+
+    const chunks = [];
+    chunks.push(data.slice(0, 4)); // "fLaC" marker
+
+    let offset = 4;
+    let audioStart = 0;
+    const keepBlocks = [];
+
+    while (offset < data.length) {
+      const isLast = (data[offset] & 0x80) !== 0;
+      const blockType = data[offset] & 0x7F;
+      const blockSize = (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+      const blockData = data.slice(offset, offset + 4 + blockSize);
+
+      // Keep only STREAMINFO (0) and SEEKTABLE (3) — strip VORBIS_COMMENT (4), PICTURE (6), APPLICATION (2), PADDING (1)
+      if (blockType === 0 || blockType === 3) {
+        keepBlocks.push(blockData);
+      }
+
+      offset += 4 + blockSize;
+      if (isLast) { audioStart = offset; break; }
+    }
+
+    // Fix last-block flag on final kept block
+    if (keepBlocks.length > 0) {
+      const last = new Uint8Array(keepBlocks[keepBlocks.length - 1]);
+      last[0] |= 0x80; // set "is last" flag
+      keepBlocks[keepBlocks.length - 1] = last;
+      // Clear "is last" on all others
+      for (let i = 0; i < keepBlocks.length - 1; i++) {
+        const b = new Uint8Array(keepBlocks[i]);
+        b[0] &= 0x7F;
+        keepBlocks[i] = b;
+      }
+    }
+
+    chunks.push(...keepBlocks);
+    if (audioStart > 0) chunks.push(data.slice(audioStart));
+
+    return new Blob(chunks, { type: 'audio/flac' });
+  }
+
+  // For WAV: strip LIST/INFO chunks
+  if (ext === 'wav') {
+    // WAV is RIFF format — keep only 'fmt ' and 'data' chunks
+    if (String.fromCharCode(...data.slice(0, 4)) !== 'RIFF') throw new Error('Not valid WAV');
+
+    const chunks = [];
+    // RIFF header placeholder (12 bytes)
+    chunks.push(data.slice(0, 12));
+    let offset = 12;
+
+    while (offset < data.length - 8) {
+      const chunkId = String.fromCharCode(...data.slice(offset, offset + 4));
+      const chunkSize = data[offset + 4] | (data[offset + 5] << 8) | (data[offset + 6] << 16) | (data[offset + 7] << 24);
+      const totalSize = 8 + chunkSize + (chunkSize % 2); // pad byte
+
+      // Keep only fmt and data chunks — strip LIST, INFO, ICMT, IART, etc.
+      if (chunkId === 'fmt ' || chunkId === 'data') {
+        chunks.push(data.slice(offset, offset + totalSize));
+      }
+
+      offset += totalSize;
+    }
+
+    // Recalculate RIFF size
+    const blob = new Blob(chunks);
+    const newBuf = await blob.arrayBuffer();
+    const newData = new Uint8Array(newBuf);
+    const riffSize = newData.length - 8;
+    newData[4] = riffSize & 0xFF;
+    newData[5] = (riffSize >> 8) & 0xFF;
+    newData[6] = (riffSize >> 16) & 0xFF;
+    newData[7] = (riffSize >> 24) & 0xFF;
+
+    return new Blob([newData], { type: 'audio/wav' });
+  }
+
+  // For other audio formats: return as-is with warning
+  throw new Error(`Stripping ${ext} not yet supported — use MP3/FLAC/WAV`);
+}
+
+async function stripDocument(file) {
+  const buf = await readAsArrayBuffer(file);
+  const zip = await JSZip.loadAsync(buf);
+
+  // Blank out core.xml (creator, dates, title, subject, keywords, etc.)
+  if (zip.file('docProps/core.xml')) {
+    zip.file('docProps/core.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ' +
+      'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" ' +
+      'xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+      '</cp:coreProperties>'
+    );
+  }
+
+  // Blank out app.xml (application name, version, company, word/page counts)
+  if (zip.file('docProps/app.xml')) {
+    zip.file('docProps/app.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">' +
+      '</Properties>'
+    );
+  }
+
+  // Remove custom properties (custom.xml)
+  if (zip.file('docProps/custom.xml')) {
+    zip.remove('docProps/custom.xml');
+    // Also remove from [Content_Types].xml
+    try {
+      const ct = await zip.file('[Content_Types].xml')?.async('text');
+      if (ct) {
+        zip.file('[Content_Types].xml',
+          ct.replace(/<Override[^>]*PartName="\/docProps\/custom\.xml"[^>]*\/>/g, '')
+        );
+      }
+    } catch {}
+    // Remove from .rels
+    try {
+      const rels = await zip.file('_rels/.rels')?.async('text');
+      if (rels) {
+        zip.file('_rels/.rels',
+          rels.replace(/<Relationship[^>]*Target="docProps\/custom\.xml"[^>]*\/>/g, '')
+        );
+      }
+    } catch {}
+  }
+
+  // Remove embedded thumbnail
+  if (zip.file('docProps/thumbnail.jpeg')) zip.remove('docProps/thumbnail.jpeg');
+  if (zip.file('docProps/thumbnail.png')) zip.remove('docProps/thumbnail.png');
+  if (zip.file('docProps/thumbnail.emf')) zip.remove('docProps/thumbnail.emf');
+  if (zip.file('docProps/thumbnail.wmf')) zip.remove('docProps/thumbnail.wmf');
+
+  // Remove comments (Word)
+  if (zip.file('word/comments.xml')) {
+    zip.file('word/comments.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:comments>'
+    );
+  }
+  if (zip.file('word/commentsExtended.xml')) {
+    zip.remove('word/commentsExtended.xml');
+  }
+  if (zip.file('word/commentsIds.xml')) {
+    zip.remove('word/commentsIds.xml');
+  }
+
+  // Remove revision/people tracking
+  if (zip.file('word/people.xml')) zip.remove('word/people.xml');
+
+  // Strip revision tracking from document settings
+  try {
+    const settingsXml = await zip.file('word/settings.xml')?.async('text');
+    if (settingsXml) {
+      let cleaned = settingsXml;
+      // Remove rsid (revision session IDs) — these track editing sessions
+      cleaned = cleaned.replace(/<w:rsids>[\s\S]*?<\/w:rsids>/g, '');
+      // Remove document protection tracking
+      cleaned = cleaned.replace(/<w:revisionView[^>]*\/>/g, '');
+      zip.file('word/settings.xml', cleaned);
+    }
+  } catch {}
+
+  // Strip rsid attributes from document body (per-run revision markers)
+  try {
+    const docXml = await zip.file('word/document.xml')?.async('text');
+    if (docXml) {
+      let cleaned = docXml;
+      cleaned = cleaned.replace(/\s+w:rsid\w*="[^"]*"/g, '');
+      zip.file('word/document.xml', cleaned);
+    }
+  } catch {}
+
+  const stripped = await zip.generateAsync({ type: 'blob', mimeType: file.type });
+  return stripped;
+}
+
+async function stripFile(result) {
+  const file = result._fileForStrip || result.file;
+  if (!file) { showToast('File reference lost — re-drop file to strip', true); return; }
+  try {
+    let blob;
+    if (result.type === 'image') blob = await stripImage(file);
+    else if (result.type === 'pdf') blob = await stripPdf(file);
+    else if (result.type === 'document') blob = await stripDocument(file);
+    else if (result.type === 'audio') blob = await stripAudio(file);
+    else { showToast(`Stripping not supported for ${result.type}`, true); return; }
+
+    downloadBlob(blob, 'stripped_' + result.name);
+    showToast(`Stripped: ${result.name}`);
+  } catch (e) {
+    showToast('Strip failed: ' + e.message, true);
+  }
+}
+
+async function stripAll() {
+  const strippable = state.results.filter(r => ['image', 'pdf', 'document', 'audio'].includes(r.type));
+  if (!strippable.length) { showToast('No strippable files', true); return; }
+  for (const r of strippable) await stripFile(r);
+  showToast(`Stripped ${strippable.length} files`);
+}
+
+// ── Processing (Hardware-Adaptive) ─────────────────
+
+async function processFiles(files) {
+  let fileArr = Array.from(files);
+  if (!fileArr.length) return;
+
+  // Enforce batch limit
+  const skipped = [];
+  if (fileArr.length > limits.maxBatch) {
+    const excess = fileArr.length - limits.maxBatch;
+    skipped.push(...fileArr.slice(limits.maxBatch).map(f => ({
+      name: f.name, reason: `Batch limit (${limits.maxBatch} max on ${hw.tier} device)`
+    })));
+    fileArr = fileArr.slice(0, limits.maxBatch);
+    showToast(`Batch capped at ${limits.maxBatch} — ${excess} file(s) skipped`, true);
+  }
+
+  $progressBar.classList.add('active');
+  $progressFill.style.width = '0%';
+  updateMemoryBar();
+
+  let memLoadAccum = 0;
+  let processed = 0;
+
+  for (let i = 0; i < fileArr.length; i++) {
+    const file = fileArr[i];
+    const type = detectType(file);
+    const sizeLimit = limits.maxFileSize[type] || limits.maxFileSize.document;
+
+    // Check file size against device limit
+    if (file.size > sizeLimit) {
+      skipped.push({
+        name: file.name,
+        reason: `Too large (${formatSize(file.size)} > ${formatSize(sizeLimit)} limit for ${hw.tier} device)`
+      });
+      $progressFill.style.width = `${((i + 1) / fileArr.length) * 100}%`;
+      continue;
+    }
+
+    // Check cumulative memory load
+    memLoadAccum += file.size;
+    if (memLoadAccum > limits.maxMemLoad) {
+      // Check real memory if available
+      const mem = getMemoryUsage();
+      if (mem && mem.pct > 75) {
+        skipped.push({
+          name: file.name,
+          reason: `Memory pressure (${mem.pct}% heap used — stopping to prevent crash)`
+        });
+        // Skip remaining files
+        for (let j = i + 1; j < fileArr.length; j++) {
+          skipped.push({ name: fileArr[j].name, reason: 'Skipped due to memory pressure' });
+        }
+        showToast('Stopped: memory pressure too high', true);
+        break;
+      }
+      // If no memory API, reset accumulator and continue cautiously
+      memLoadAccum = file.size;
+    }
+
+    let metadata = {};
+    try {
+      if (type === 'image') metadata = await extractImage(file);
+      else if (type === 'pdf') metadata = await extractPdf(file);
+      else if (type === 'audio') metadata = await extractAudio(file);
+      else if (type === 'video') metadata = await extractVideo(file);
+      else if (type === 'document') metadata = await extractDocument(file);
+      else metadata = { _error: 'Unsupported file type' };
+    } catch (e) {
+      metadata = { _error: e.message };
+    }
+
+    // Don't hold file reference for large files (saves RAM)
+    const holdFile = file.size < limits.thumbMaxSize;
+
+    const result = {
+      id: Date.now() + '-' + i,
+      file: holdFile ? file : null,
+      _fileName: file.name,
+      _fileForStrip: file, // always keep ref for stripping, released after
+      type,
+      name: file.name,
+      size: file.size,
+      lastModified: new Date(file.lastModified),
+      mimeType: file.type || 'unknown',
+      metadata
+    };
+
+    state.results.push(result);
+    processed++;
+
+    if (metadata._gps) {
+      state.gpsPoints.push({ ...metadata._gps, name: file.name, id: result.id });
+    }
+
+    $progressFill.style.width = `${((i + 1) / fileArr.length) * 100}%`;
+    updateMemoryBar();
+
+    // Yield to UI to prevent freezing
+    if (i % limits.yieldEvery === 0) await yieldToUI();
+  }
+
+  // Store skipped files
+  state.skipped.push(...skipped);
+
+  setTimeout(() => $progressBar.classList.remove('active'), 500);
+  renderResults();
+  updateStats();
+
+  if (state.gpsPoints.length) initMap();
+
+  const msg = `Processed ${processed} file(s)` + (skipped.length ? ` — ${skipped.length} skipped` : '');
+  showToast(msg, skipped.length > 0);
+}
+
+// ── Rendering ──────────────────────────────────────
+
+function renderResults() {
+  $emptyState.style.display = state.results.length ? 'none' : 'block';
+  $toolbar.style.display = state.results.length ? 'flex' : 'none';
+  $stats.style.display = state.results.length ? 'flex' : 'none';
+
+  // Clear existing cards
+  $results.querySelectorAll('.file-card').forEach(c => c.remove());
+
+  for (const r of state.results) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.id = 'card-' + r.id;
+
+    const meta = r.metadata;
+    const entries = Object.entries(meta).filter(([k]) => !k.startsWith('_'));
+    const hasGps = !!meta._gps;
+    const canStrip = ['image', 'pdf', 'document', 'audio'].includes(r.type);
+
+    card.innerHTML = `
+      <div class="file-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="file-icon ${r.type}">${getIcon(r.type)}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(r.name)}</div>
+          <div class="file-meta">
+            <span>${formatSize(r.size)}</span>
+            <span>${r.type}</span>
+            <span>${entries.length} fields</span>
+            ${hasGps ? '<span style="color:var(--success)">GPS</span>' : ''}
+          </div>
+        </div>
+        <div class="file-actions">
+          ${canStrip ? `<button class="btn" onclick="event.stopPropagation();stripFile(state.results.find(x=>x.id==='${r.id}'))">Strip</button>` : ''}
+          ${hasGps ? `<button class="btn" onclick="event.stopPropagation();panToGps('${r.id}')" title="Show on map">Map</button>` : ''}
+          <button class="btn danger" onclick="event.stopPropagation();removeFile('${r.id}')" title="Remove from list">&#10005;</button>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="file-body">
+        ${r.type === 'image' ? `<div class="thumb-row"><img class="thumbnail" src="" data-file-id="${r.id}"></div>` : ''}
+        ${meta._error ? `<p style="color:var(--danger);font-size:0.8rem;margin-bottom:8px">${escapeHtml(meta._error)}</p>` : ''}
+        <div class="meta-section">File Info</div>
+        <table class="meta-table">
+          <tr><td>Name</td><td>${escapeHtml(r.name)}</td></tr>
+          <tr><td>Size</td><td>${formatSize(r.size)}</td></tr>
+          <tr><td>Type</td><td>${r.mimeType}</td></tr>
+          <tr><td>Last Modified</td><td>${formatDate(r.lastModified) || '-'}</td></tr>
+        </table>
+        ${entries.length ? `
+          <div class="meta-section">Extracted Metadata</div>
+          <table class="meta-table">
+            ${entries.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${
+              (k === 'GPS Latitude' || k === 'GPS Longitude') && meta._gps
+                ? `<span class="gps-link" onclick="panToGps('${r.id}')">${escapeHtml(String(v))}</span>`
+                : escapeHtml(String(v))
+            }</td></tr>`).join('')}
+          </table>
+        ` : '<p style="color:var(--text2);font-size:0.8rem;margin-top:8px">No metadata extracted</p>'}
+      </div>
+    `;
+
+    // Load thumbnail for images (only if file ref available)
+    if (r.type === 'image' && r.file) {
+      const thumb = card.querySelector('.thumbnail');
+      readAsDataURL(r.file).then(url => thumb.src = url).catch(() => {});
+    } else if (r.type === 'image') {
+      const thumb = card.querySelector('.thumbnail');
+      if (thumb) thumb.alt = 'Thumbnail skipped (large file)';
+    }
+
+    $results.appendChild(card);
+  }
+
+  // Show skipped files
+  $results.querySelectorAll('.file-skipped').forEach(s => s.remove());
+  for (const s of state.skipped) {
+    const el = document.createElement('div');
+    el.className = 'file-skipped';
+    el.textContent = `Skipped: ${s.name} — ${s.reason}`;
+    $results.appendChild(el);
+  }
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function updateStats() {
+  document.getElementById('statFiles').textContent = state.results.length;
+  document.getElementById('statGps').textContent = state.gpsPoints.length;
+  const types = [...new Set(state.results.map(r => r.type))];
+  document.getElementById('statTypes').textContent = types.join(', ');
+  document.getElementById('statLimit').textContent = `${limits.maxBatch} batch / ${formatSize(Math.max(...Object.values(limits.maxFileSize)))} max`;
+  updateMemoryBar();
+}
+
+// ── Map ────────────────────────────────────────────
+
+function initMap() {
+  $mapSection.classList.add('visible');
+
+  if (!map) {
+    map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }).addTo(map);
+  }
+
+  // Clear existing markers
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  for (const pt of state.gpsPoints) {
+    const marker = L.marker([pt.lat, pt.lng])
+      .addTo(map)
+      .bindPopup(`<b>${escapeHtml(pt.name)}</b><br>${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}`);
+    marker._ptId = pt.id;
+    markers.push(marker);
+  }
+
+  fitMapBounds();
+}
+
+function fitMapBounds() {
+  if (!map || !markers.length) return;
+  if (markers.length === 1) {
+    map.setView(markers[0].getLatLng(), 14);
+  } else {
+    const group = L.featureGroup(markers);
+    map.fitBounds(group.getBounds().pad(0.1));
+  }
+}
+
+function panToGps(id) {
+  $mapSection.classList.add('visible');
+  if (!map) initMap();
+
+  const marker = markers.find(m => m._ptId === id);
+  if (marker) {
+    map.setView(marker.getLatLng(), 16);
+    marker.openPopup();
+    $mapSection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+// ── Export ──────────────────────────────────────────
+
+function exportJSON() {
+  if (!state.results.length) return;
+  const data = state.results.map(r => ({
+    filename: r.name,
+    size: r.size,
+    type: r.type,
+    mimeType: r.mimeType,
+    lastModified: r.lastModified.toISOString(),
+    metadata: Object.fromEntries(
+      Object.entries(r.metadata).filter(([k]) => !k.startsWith('_'))
+    )
+  }));
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'metadata_export.json');
+  showToast('Exported JSON');
+}
+
+function exportCSV() {
+  if (!state.results.length) return;
+
+  // Collect all unique keys
+  const allKeys = new Set(['Filename', 'Size', 'Type', 'MIME Type', 'Last Modified']);
+  for (const r of state.results) {
+    for (const k of Object.keys(r.metadata)) {
+      if (!k.startsWith('_')) allKeys.add(k);
+    }
+  }
+  const keys = [...allKeys];
+
+  const csvEscape = (v) => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  let csv = keys.map(csvEscape).join(',') + '\n';
+  for (const r of state.results) {
+    const row = keys.map(k => {
+      if (k === 'Filename') return r.name;
+      if (k === 'Size') return r.size;
+      if (k === 'Type') return r.type;
+      if (k === 'MIME Type') return r.mimeType;
+      if (k === 'Last Modified') return r.lastModified.toISOString();
+      return r.metadata[k] ?? '';
+    });
+    csv += row.map(csvEscape).join(',') + '\n';
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  downloadBlob(blob, 'metadata_export.csv');
+  showToast('Exported CSV');
+}
+
+// ── Remove / Clear ─────────────────────────────────
+
+function removeFile(id) {
+  // Remove from results
+  const idx = state.results.findIndex(r => r.id === id);
+  if (idx === -1) return;
+  const removed = state.results.splice(idx, 1)[0];
+
+  // Remove GPS point if any
+  state.gpsPoints = state.gpsPoints.filter(p => p.id !== id);
+
+  // Remove map marker
+  const markerIdx = markers.findIndex(m => m._ptId === id);
+  if (markerIdx !== -1) {
+    map.removeLayer(markers[markerIdx]);
+    markers.splice(markerIdx, 1);
+  }
+
+  // Hide map if no GPS points left
+  if (!state.gpsPoints.length) $mapSection.classList.remove('visible');
+
+  renderResults();
+  updateStats();
+  showToast(`Removed: ${removed.name}`);
+}
+
+function clearAll() {
+  state.results = [];
+  state.gpsPoints = [];
+  state.skipped = [];
+  if (map) {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+  }
+  $mapSection.classList.remove('visible');
+  updateMemoryBar();
+  renderResults();
+  updateStats();
+  showToast('Cleared');
+}
+
+// ── Event Handlers ─────────────────────────────────
+
+$dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  $dropzone.classList.add('dragover');
+});
+
+$dropzone.addEventListener('dragleave', () => {
+  $dropzone.classList.remove('dragover');
+});
+
+$dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  $dropzone.classList.remove('dragover');
+  processFiles(e.dataTransfer.files);
+});
+
+$fileInput.addEventListener('change', (e) => {
+  processFiles(e.target.files);
+  e.target.value = '';
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.file-card.open').forEach(c => c.classList.remove('open'));
+  }
+});
+
+</script>
+</body>
+</html>
